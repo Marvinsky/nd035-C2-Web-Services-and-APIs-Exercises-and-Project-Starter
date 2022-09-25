@@ -5,13 +5,15 @@ import static org.springframework.hateoas.mvc.ControllerLinkBuilder.linkTo;
 import static org.springframework.hateoas.mvc.ControllerLinkBuilder.methodOn;
 
 import com.udacity.vehicles.domain.car.Car;
+import com.udacity.vehicles.service.CarNotFoundException;
 import com.udacity.vehicles.service.CarService;
+import io.swagger.annotations.ApiResponse;
+import io.swagger.annotations.ApiResponses;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.List;
 import java.util.stream.Collectors;
 import javax.validation.Valid;
-
 import org.springframework.hateoas.Resource;
 import org.springframework.hateoas.Resources;
 import org.springframework.http.ResponseEntity;
@@ -29,6 +31,11 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/cars")
+@ApiResponses(value = {
+    @ApiResponse(code=400, message = "This is a bad request, please follow the API documentation for the proper request format."),
+    @ApiResponse(code=401, message = "Due to security constraints, your access request cannot be authorized. "),
+    @ApiResponse(code=500, message = "The server is down. Please make sure that the Car microservice is running.")
+})
 class CarController {
 
     private final CarService carService;
@@ -63,7 +70,7 @@ class CarController {
          * TODO: Use the `assembler` on that car and return the resulting output.
          *   Update the first line as part of the above implementing.
          */
-        return assembler.toResource(new Car());
+        return assembler.toResource(carService.findById(id));
     }
 
     /**
@@ -79,7 +86,13 @@ class CarController {
          * TODO: Use the `assembler` on that saved car and return as part of the response.
          *   Update the first line as part of the above implementing.
          */
-        Resource<Car> resource = assembler.toResource(new Car());
+        Car newCar;
+        try {
+            newCar = carService.save(car);
+        } catch (CarNotFoundException e) {
+            return ResponseEntity.badRequest().body(new ApiError(e.getMessage(), null));
+        }
+        Resource<Car> resource = assembler.toResource(newCar);
         return ResponseEntity.created(new URI(resource.getId().expand().getHref())).body(resource);
     }
 
@@ -97,7 +110,11 @@ class CarController {
          * TODO: Use the `assembler` on that updated car and return as part of the response.
          *   Update the first line as part of the above implementing.
          */
-        Resource<Car> resource = assembler.toResource(new Car());
+        Car oldCar = carService.findById(id);
+        car.setId(oldCar.getId());
+        carService.save(car);
+
+        Resource<Car> resource = assembler.toResource(car);
         return ResponseEntity.ok(resource);
     }
 
@@ -111,6 +128,11 @@ class CarController {
         /**
          * TODO: Use the Car Service to delete the requested vehicle.
          */
+        try {
+            carService.delete(id);
+        } catch (CarNotFoundException e) {
+            return ResponseEntity.badRequest().body(new ApiError(e.getMessage(), null));
+        }
         return ResponseEntity.noContent().build();
     }
 }
